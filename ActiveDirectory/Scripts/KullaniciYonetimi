@@ -1,0 +1,103 @@
+# =====================================================
+# PowerShell AD Kullanıcı Yönetim Scripti
+# Derleme: 12
+# Versiyon: 1.3
+# Yazar: Emrah Tolu
+# =====================================================
+
+# Script bilgilerini göster
+Write-Host "=================================" -ForegroundColor Cyan
+Write-Host " AD Kullanıcı Yönetim Scripti" -ForegroundColor Green
+Write-Host " Derleme: 12 | Versiyon: 1.3" -ForegroundColor Yellow
+Write-Host " Yazar: Emrah Tolu" -ForegroundColor Magenta
+Write-Host "=================================" -ForegroundColor Cyan
+Start-Sleep -Seconds 2  # Bilgi ekranını 2 saniye göster
+
+# Kullanıcı listesinin bulunduğu dosya 
+$Users = Get-Content "C:\scripts\userdisable.txt"
+
+# Yeni OU (Organizational Unit)
+$NewOU = "OU=ISTEN_AYRILANLAR,DC=domain,DC=bilgi"
+
+# Silinen yönetici DN
+$ManagerDN = "CN=DEGISEN_YONETICI_ADI,OU=HESAP,OU=YONETICI,DC=domain,DC=bilgi"
+
+# Döngüye al
+while ($true) {
+    # Kullanıcıya işlem seçmesi için menü göster
+    Write-Host "`nNe yapmak istersiniz? Seçim yapın:"
+    Write-Host "1 - Manager bilgisini kaldır"
+    Write-Host "2 - Domain Users hariç tüm gruplardan çıkar"
+    Write-Host "3 - Kullanıcıyı yeni OU'ya taşı"
+    Write-Host "4 - Kullanıcıyı devre dışı bırak"
+    Write-Host "5 - Kullanıcının yöneticisini 'SİLİNEN YÖNETİCİ' olarak ayarla"
+    Write-Host "6 - Description alanına tarih ve saat ekle"
+    Write-Host "7 - Çıkış"
+    $Secim = Read-Host "Seçiminizi girin (1, 2, 3, 4, 5, 6, 7)"
+    
+    if ($Secim -eq "7") {
+        Write-Host "Çıkış yapılıyor..." -ForegroundColor Yellow
+        break
+    }
+    
+    # Kullanıcıları işleme al
+    foreach ($User in $Users) {
+        $ADUser = Get-ADUser -Identity $User -ErrorAction SilentlyContinue
+
+        if ($ADUser) {
+            Write-Host "İşlem başlıyor: $User" -ForegroundColor Cyan
+
+            switch ($Secim) {
+                "1" {
+                    # 1. Kullanıcının "Manager" alanını BOŞALT
+                    Set-ADUser -Identity $User -Clear Manager
+                    Write-Host " - Manager bilgisi kaldırıldı" -ForegroundColor Green
+                }
+
+                "2" {
+                    # 2. Kullanıcıyı "Domain Users" hariç tüm gruplardan çıkar
+                    $Groups = Get-ADUser $User -Property MemberOf | Select-Object -ExpandProperty MemberOf
+                    foreach ($Group in $Groups) {
+                        if ($Group -notmatch "CN=Domain Users,") {
+                            Remove-ADGroupMember -Identity $Group -Members $User -Confirm:$false
+                            Write-Host " - Çıkarıldı: $Group" -ForegroundColor Green
+                        }
+                    }
+                }
+
+                "3" {
+                    # 3. Kullanıcıyı yeni OU'ya taşı
+                    Move-ADObject -Identity $ADUser.DistinguishedName -TargetPath $NewOU
+                    Write-Host " - Kullanıcı taşındı: $NewOU" -ForegroundColor Green
+                }
+
+                "4" {
+                    # 4. Kullanıcıyı devre dışı bırak
+                    Disable-ADAccount -Identity $User
+                    Write-Host " - Kullanıcı devre dışı bırakıldı." -ForegroundColor Yellow
+                }
+
+                "5" {
+                    # 5. Kullanıcının yöneticisini "SİLİNEN YÖNETİCİ" olarak ayarla
+                    Set-ADUser -Identity $User -Manager $ManagerDN
+                    Write-Host "$User kullanıcısının yöneticisi güncellendi." -ForegroundColor Green
+                }
+                
+                "6" {
+                    # 6. Kullanıcının Description alanına işten ayrılış tarihini ekle
+                    $TarihSaat = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+                    Set-ADUser -Identity $User -Description "İşten ayrılış: $TarihSaat"
+                    Write-Host " - Description güncellendi: İşten ayrılış: $TarihSaat" -ForegroundColor Green
+                }
+                
+                default {
+                    Write-Host "Hatalı seçim! Lütfen 1-7 arasında bir değer girin." -ForegroundColor Red
+                }
+            } # switch kapandı
+        } else {
+            Write-Host "HATA: Kullanıcı bulunamadı - $User" -ForegroundColor Red
+        }
+    } # foreach kapandı
+
+    Write-Host "Seçilen işlem tamamlandı. Başka bir işlem yapmak istiyor musunuz?" -ForegroundColor Magenta
+} # while döngüsü kapandı

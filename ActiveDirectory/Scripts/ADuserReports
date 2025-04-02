@@ -1,0 +1,105 @@
+# Raporları kaydetmek için dizini oluştur
+$RaporDizini = "C:\Raporlar"
+If (!(Test-Path $RaporDizini)) {
+    New-Item -ItemType Directory -Path $RaporDizini | Out-Null
+}
+# =====================================================
+# PowerShell AD Kullanıcı Raporlama Scripti
+# Derleme: 3
+# Versiyon: 1.0
+# Yazar: Emrah Tolu
+# =====================================================
+
+# Script bilgilerini göster
+Write-Host "=================================" -ForegroundColor Cyan
+Write-Host " AD Kullanıcı Raporlama Scripti" -ForegroundColor Green
+Write-Host " Derleme: 3 | Versiyon: 1.0" -ForegroundColor Yellow
+Write-Host " Yazar: Emrah Tolu" -ForegroundColor Magenta
+Write-Host "=================================" -ForegroundColor Cyan
+Start-Sleep -Seconds 3  # Bilgi ekranını 3 saniye göster
+function Menu {
+    Clear-Host
+    Write-Host "========================================" -ForegroundColor Cyan
+    Write-Host "          AD RAPORLARI" -ForegroundColor Yellow
+    Write-Host "========================================" -ForegroundColor Cyan
+    Write-Host "[1] Aktif Kullanıcı Listesi"
+    Write-Host "[2] Son 90 Gün İçinde Hiç Giriş Yapmamış Kullanıcılar"
+    Write-Host "[3] Yaklaşan Parola Süresi Dolum Raporu"
+    Write-Host "[4] Son 30 Gün İçinde Oluşturulan Kullanıcılar"
+    Write-Host "[5] Devre Dışı Bırakılmış Kullanıcılar"
+    Write-Host "[6] Kullanıcıların Grup Üyelikleri"
+    Write-Host "[0] Çıkış"
+    Write-Host "========================================" -ForegroundColor Cyan
+}
+
+function AktifKullanicilar {
+    Write-Host " Aktif kullanıcı listesi oluşturuluyor..."
+    Get-ADUser -Filter {Enabled -eq $true} -Properties DisplayName, SamAccountName, UserPrincipalName, EmailAddress, Created, LastLogonDate | 
+    Select-Object DisplayName, SamAccountName, UserPrincipalName, EmailAddress, Created, LastLogonDate |
+    Export-Csv -Path "$RaporDizini\Aktif_Kullanicilar.csv" -NoTypeInformation -Encoding UTF8
+    Write-Host " Rapor oluşturuldu: $RaporDizini\Aktif_Kullanicilar.csv" -ForegroundColor Green
+}
+
+function PasifKullanicilar {
+    Write-Host " Pasif kullanıcı listesi oluşturuluyor..."
+    $DateLimit = (Get-Date).AddDays(-90)
+    Get-ADUser -Filter {LastLogonDate -lt $DateLimit -and Enabled -eq $true} -Properties DisplayName, SamAccountName, LastLogonDate |
+    Select-Object DisplayName, SamAccountName, LastLogonDate |
+    Export-Csv -Path "$RaporDizini\Pasif_Kullanicilar.csv" -NoTypeInformation -Encoding UTF8
+    Write-Host " Rapor oluşturuldu: $RaporDizini\Pasif_Kullanicilar.csv" -ForegroundColor Green
+}
+
+function ParolaSuresiDolacaklar {
+    Write-Host " Parola süresi dolacak kullanıcılar listeleniyor..."
+    $MaxPasswordAge = (Get-ADDefaultDomainPasswordPolicy).MaxPasswordAge.Days
+    $DateLimit = (Get-Date).AddDays(-$MaxPasswordAge + 10)
+    Get-ADUser -Filter * -Properties DisplayName, SamAccountName, PasswordLastSet |
+    Where-Object { $_.PasswordLastSet -lt $DateLimit } |
+    Select-Object DisplayName, SamAccountName, PasswordLastSet |
+    Export-Csv -Path "$RaporDizini\Parola_Suresi_Dolacaklar.csv" -NoTypeInformation -Encoding UTF8
+    Write-Host "Rapor oluşturuldu: $RaporDizini\Parola_Suresi_Dolacaklar.csv" -ForegroundColor Green
+}
+
+function YeniKullanicilar {
+    Write-Host " Son 30 günde eklenen kullanıcılar listeleniyor..."
+    $DateLimit = (Get-Date).AddDays(-30)
+    Get-ADUser -Filter {Created -gt $DateLimit} -Properties DisplayName, SamAccountName, Created |
+    Select-Object DisplayName, SamAccountName, Created |
+    Export-Csv -Path "$RaporDizini\Yeni_Kullanicilar.csv" -NoTypeInformation -Encoding UTF8
+    Write-Host " Rapor oluşturuldu: $RaporDizini\Yeni_Kullanicilar.csv" -ForegroundColor Green
+}
+
+function DevreDisiKullanicilar {
+    Write-Host " Devre dışı kullanıcı listesi oluşturuluyor..."
+    Get-ADUser -Filter {Enabled -eq $false} -Properties DisplayName, SamAccountName, LastLogonDate |
+    Select-Object DisplayName, SamAccountName, LastLogonDate |
+    Export-Csv -Path "$RaporDizini\Devre_Disi_Kullanicilar.csv" -NoTypeInformation -Encoding UTF8
+    Write-Host " Rapor oluşturuldu: $RaporDizini\Devre_Disi_Kullanicilar.csv" -ForegroundColor Green
+}
+
+function KullaniciGrupUyelikleri {
+    Write-Host " Kullanıcı grup üyelikleri listeleniyor..."
+    Get-ADUser -Filter * -Properties DisplayName, MemberOf |
+    Select-Object DisplayName, @{Name="Groups"; Expression={$_.MemberOf -join "; "}} |
+    Export-Csv -Path "$RaporDizini\Kullanici_Grup_Uyeligi.csv" -NoTypeInformation -Encoding UTF8
+    Write-Host "Rapor oluşturuldu: $RaporDizini\Kullanici_Grup_Uyeligi.csv" -ForegroundColor Green
+}
+
+# Menü Çalıştırma Döngüsü
+do {
+    Menu
+    $secim = Read-Host "Seçiminizi yapın"
+
+    switch ($secim) {
+        "1" { AktifKullanicilar }
+        "2" { PasifKullanicilar }
+        "3" { ParolaSuresiDolacaklar }
+        "4" { YeniKullanicilar }
+        "5" { DevreDisiKullanicilar }
+        "6" { KullaniciGrupUyelikleri }
+        "0" { Write-Host "Çıkış yapılıyor..." -ForegroundColor Red; break }
+        default { Write-Host "Geçersiz seçim, tekrar deneyin!" -ForegroundColor Red }
+    }
+    
+    Start-Sleep -Seconds 2
+} while ($secim -ne "0")

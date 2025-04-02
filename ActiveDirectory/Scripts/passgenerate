@@ -1,0 +1,86 @@
+# Version: 1.1
+# Author: Emrah Tolu
+
+Function Generate-Pass {
+    param (
+        [int]$Option,
+        [bool]$IncludeUpperCase = $true,
+        [bool]$IncludeLowerCase = $true,
+        [bool]$IncludeNumbers = $true,
+        [bool]$IncludeSpecial = $true,
+        [string]$ExcludeCharacters = "",
+        [string]$CustomLength = ""
+    )
+
+    # Eğer Option değeri yoksa kullanıcıdan seçim al
+    if (-not $Option) {
+        Write-Host "`n[Şifre Uzunluğu Seçin]"
+        Write-Host "1 - Kısa (5 karakter)"
+        Write-Host "2 - Orta (10 karakter)"
+        Write-Host "3 - Uzun (15 karakter)"
+        Write-Host "4 - Çok Uzun (23 karakter)"
+        $Option = Read-Host "Seçiminizi yapın (1-4)"
+    }
+
+    # Geçerli bir seçenek olup olmadığını kontrol et
+    if ($Option -notin 1,2,3,4) {
+        Write-Host "Hata: Geçersiz seçenek! Lütfen 1-4 arasında bir değer girin." -ForegroundColor Red
+        return
+    }
+
+    # Şifre uzunluğu eşleşmeleri
+    $LengthMap = @{ 1 = 5; 2 = 10; 3 = 15; 4 = 23 }
+    $Digits = if ($CustomLength -match '^[0-9]+$') { [int]$CustomLength } else { $LengthMap[$Option] }
+
+    # Kullanıcıya opsiyonları sorma
+    Write-Host "`n[Şifre Karakter Seçenekleri] (Evet için 'E', Hayır için 'H' girin)"
+    $IncludeUpperCase = (Read-Host "Büyük Harfler Kullanılsın mı? (E/H)") -eq "E"
+    $IncludeLowerCase = (Read-Host "Küçük Harfler Kullanılsın mı? (E/H)") -eq "E"
+    $IncludeNumbers = (Read-Host "Rakamlar Kullanılsın mı? (E/H)") -eq "E"
+    $IncludeSpecial = (Read-Host "Özel Karakterler Kullanılsın mı? (E/H)") -eq "E"
+    
+    $ExcludeCharacters = Read-Host "Hariç tutulacak karakterleri girin (Boş bırakabilirsiniz)"
+
+    # Karakter kümeleri
+    $UpperCase = if ($IncludeUpperCase) { 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.ToCharArray() } else { @() }
+    $LowerCase = if ($IncludeLowerCase) { 'abcdefghijklmnopqrstuvwxyz'.ToCharArray() } else { @() }
+    $Numbers = if ($IncludeNumbers) { '0123456789'.ToCharArray() } else { @() }
+    $Special = if ($IncludeSpecial) { '!@#$%^&*()-_=+[]{}|;:,.<>?/`~'.ToCharArray() } else { @() }
+
+    # Hariç tutulacak karakterleri temizle
+    $ExcludeSet = $ExcludeCharacters.ToCharArray()
+    $UpperCase = $UpperCase | Where-Object { $_ -notin $ExcludeSet }
+    $LowerCase = $LowerCase | Where-Object { $_ -notin $ExcludeSet }
+    $Numbers = $Numbers | Where-Object { $_ -notin $ExcludeSet }
+    $Special = $Special | Where-Object { $_ -notin $ExcludeSet }
+
+    # Kullanılabilir karakterleri birleştir
+    $AllCharacters = $UpperCase + $LowerCase + $Numbers + $Special
+    if ($AllCharacters.Count -eq 0) {
+        Write-Host "Hata: En az bir karakter türü seçilmelidir." -ForegroundColor Red
+        return
+    }
+
+    # Her kategoriden en az bir karakter seç
+    $Password = @()
+    if ($UpperCase.Count -gt 0) { $Password += $UpperCase | Get-Random -Count 1 }
+    if ($LowerCase.Count -gt 0) { $Password += $LowerCase | Get-Random -Count 1 }
+    if ($Numbers.Count -gt 0) { $Password += $Numbers | Get-Random -Count 1 }
+    if ($Special.Count -gt 0) { $Password += $Special | Get-Random -Count 1 }
+
+    # Kalan karakterleri rastgele seç
+    $RemainingCount = $Digits - $Password.Count
+    if ($RemainingCount -gt 0) {
+        $Password += $AllCharacters | Get-Random -Count $RemainingCount
+    }
+
+    # Karakterleri karıştır ve birleştir
+    $FinalPassword = ($Password | Get-Random -Count $Password.Count) -join ''
+    
+    # Sonucu ekrana yazdır
+    Write-Host "`nOluşturulan Şifre: " -NoNewline -ForegroundColor Yellow
+    Write-Host $FinalPassword -ForegroundColor Green
+}
+
+# Script başlatıldığında fonksiyonu çağır
+Generate-Pass
